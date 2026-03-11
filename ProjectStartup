@@ -1,8 +1,9 @@
-Team Number
+Team Number:
 #7
-Team Name
+Team Name:
+Team Choo Choo Trains 
 
-Team Members
+Team Members:
 
 Name                Email                           Github Username
 Hudson Siglinger - hudson.siglinger@colorado.edu - hwsigli
@@ -12,10 +13,31 @@ Ryken Armstrong - ryken.armstrong@colorado.edu - Rykenarm
 Denzel Gurung - denzel.gurung@colorado.edu - DenzelGurung16
 Joshua Stone - joshua.stone@colorado.edu - Hai-L9
 
-Audience
+Application Name: Task Tracker 2.765.32564
 
-Vision Statement
+Application Discription: 
+Our idea is a corporate task tracker where employees log in to 
+create and manage work-order style tasks that can be assigned to contractors and moved through 
+statuses and steps on a bulletin-board (Kanban) view. Each task includes a real-world location, a
+nd the app uses the Google Maps API to let users search/drop a pin and to display tasks on a map for q
+uick planning. It runs on a Node/Express middle layer with PostgreSQL storing users (hashed passwords) 
+and task data, with session-based login/logout, all packaged in Docker containers for portability. 
+Our tracker is tailored for hypothetical real world "worksites" storing and maintaining sets of data a
+nd work history for each "worksite" as they evolve while only revealing the necessary portion of up-to-date 
+information to assigned contractors at that site. This is all done with a secure and user friendly UI that 
+lets any manager easily check in on or update operation tasks.
 
-Development Methodology
+Audience:
+Our application is targeted for corporate work environments. The app aims to create a 
+streamlined way to organize tasks. It is made for teams of employees that need 
+to efficiently communicate with each other.
 
-Communication Plan
+Vision Statement:
+
+
+Development Methodology:
+
+
+Communication Plan:
+
+
