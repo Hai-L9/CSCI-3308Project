@@ -48,4 +48,11 @@ Communication Plan:
 Team meetings Thursdays 5pm, mostly Zoom
 TA meetings Monday 2:45pm, in-person/Zoom
 
+Extra Credit / Potential Issues:
+- API Complexity: Managing Google Maps integration and staying within quota limits.
+- Role Based Access: Implementing secure logic to ensure data privacy.
+- Docker/DB Issues: Networking and data persistence hurdles between Node, Express, and PostgreSQL containers.
+- Data Concurrency: Handling race conditions if multiple users update the same task or status simultaneously.
+- Scope Creep: Over complicating the MVP with too many features before the core Kanban/Map loop is polished.
+
 
