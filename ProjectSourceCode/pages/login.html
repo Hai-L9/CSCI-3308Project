@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background: #f5f5f5;
+    }
+
+    form {
+      background: white;
+      padding: 2rem;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      width: 100%;
+      max-width: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    h2 { margin: 0 0 4px; font-size: 1.2rem; }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+
+    input:focus { outline: 2px solid #555; border-color: transparent; }
+
+    button {
+      padding: 9px;
+      background: #222;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    button:hover { background: #444; }
+
+    .error {
+      color: #c00;
+      font-size: 12px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <form id="loginForm">
+    <h2>Sign in</h2>
+
+    <div class="field">
+      <input type="email" id="email" placeholder="Email" autocomplete="email" required />
+      <div class="error" id="emailError">Please enter a valid email.</div>
+    </div>
+
+    <div class="field">
+      <input type="password" id="password" placeholder="Password" autocomplete="current-password" required />
+      <div class="error" id="passwordError">Please enter your password.</div>
+    </div>
+
+    <div class="error" id="apiError">Invalid email or password.</div>
+
+    <button type="submit" id="submitBtn">Log in</button>
+  </form>
+
+  <script src="../scripts/login.js"></script>
+</body>
+</html>
