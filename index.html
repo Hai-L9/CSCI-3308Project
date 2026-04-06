@@ -19,7 +19,36 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
       <div class="container">
         <a class="navbar-brand fw-bold" href="#">Task Tracker 0.0.1</a>
-        <span class="navbar-text text-white-50">Team Choo Choo Trains</span>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#mainNavbar"
+          aria-controls="mainNavbar"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse justify-content-end" id="mainNavbar">
+          <ul class="navbar-nav align-items-lg-center gap-2">
+            <li class="nav-item">
+              <a class="btn btn-light btn-sm fw-semibold" href="ProjectSourceCode/pages/login.html">Login</a>
+            </li>
+            <li class="nav-item">
+              <button class="btn btn-outline-light btn-sm fw-semibold" type="button">Register</button>
+            </li>
+            <li class="nav-item">
+              <button class="btn btn-outline-light btn-sm fw-semibold" type="button">Tasks</button>
+            </li>
+            <li class="nav-item">
+              <button class="btn btn-outline-light btn-sm fw-semibold" type="button">Service Status</button>
+            </li>
+            <li class="nav-item ms-lg-2">
+              <span class="navbar-text text-white-50">Team Choo Choo Trains</span>
+            </li>
+          </ul>
+        </div>
       </div>
     </nav>
 
