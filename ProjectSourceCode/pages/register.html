@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Login</title>
+  <title>Register</title>
   <style>
     body {
       font-family: sans-serif;
@@ -58,16 +58,39 @@
 
     button:hover { background: #444; }
 
-    .error {
+    .error, .success {
       color: #c00;
       font-size: 12px;
       display: none;
     }
+
+    .success {
+      color: #080;
+    }
+
+    .link {
+      font-size: 12px;
+      text-align: center;
+      margin-top: 8px;
+    }
+    
+    .link a {
+      color: #0066cc;
+      text-decoration: none;
+    }
+    .link a:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
-  <form id="loginForm">
-    <h2>Sign in</h2>
+  <form id="registerForm">
+    <h2>Register</h2>
+
+    <div class="field">
+      <input type="text" id="username" placeholder="Username" autocomplete="username" required />
+      <div class="error" id="usernameError">Please enter a username.</div>
+    </div>
 
     <div class="field">
       <input type="email" id="email" placeholder="Email" autocomplete="email" required />
@@ -75,19 +98,20 @@
     </div>
 
     <div class="field">
-      <input type="password" id="password" placeholder="Password" autocomplete="current-password" required />
+      <input type="password" id="password" placeholder="Password" autocomplete="new-password" required />
       <div class="error" id="passwordError">Please enter your password.</div>
     </div>
 
-    <div class="error" id="apiError">Invalid email or password.</div>
+    <div class="error" id="apiError">Registration failed. Please try again.</div>
+    <div class="success" id="apiSuccess">Success! Redirecting...</div>
 
-    <button type="submit" id="submitBtn">Log in</button>
+    <button type="submit" id="submitBtn">Sign up</button>
 
-    <div class="link" style="font-size: 12px; text-align: center; margin-top: 8px;">
-      Don't have an account? <a href="register.html" style="color: #0066cc; text-decoration: none;">Register here</a>
+    <div class="link">
+      Already have an account? <a href="login.html">Log in here</a>
     </div>
   </form>
 
-  <script src="../scripts/login.js"></script>
+  <script src="../scripts/register.js"></script>
 </body>
 </html>

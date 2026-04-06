@@ -17,7 +17,7 @@ async function apiLogin(email, password) {
  * ─────────────────────────────────────────────────── */
 function onSuccess(data) {
   localStorage.setItem('token', data.token);
-  window.location.href = '/dashboard';
+  window.location.href = '/index.html';
 }
 
 const form      = document.getElementById('loginForm');
