@@ -254,3 +254,46 @@ describe('Update User API', () => {
       });
   });
 });
+
+// ---- Extra Credit: Login API (additional cases) ----
+
+describe('Login API — Extra Credit', () => {
+  const ecUser = {
+    username: `ec${TS}`,
+    email:    `ec${TS}@test.com`,
+    password: 'password123',
+  };
+
+  before(done => {
+    // Register the test user once before these tests run
+    chai.request(server)
+      .post('/api/auth/register')
+      .send(ecUser)
+      .end(() => done());
+  });
+
+  // ---- Positive ----
+  it('Returns 200 and a token when logging in with username instead of email', done => {
+    chai
+      .request(server)
+      .post('/api/auth/login')
+      .send({ username: ecUser.username, password: ecUser.password })  // username, not email
+      .end((err, res) => {
+        expect(res).to.have.status(200);
+        expect(res.body).to.have.property('token');
+        done();
+      });
+  });
+
+  // ---- Negative ----
+  it('Returns 401 (or 404) for a valid-format email that does not exist in the system', done => {
+    chai
+      .request(server)
+      .post('/api/auth/login')
+      .send({ email: `ghost${TS}@test.com`, password: 'password123' })  // email never registered
+      .end((err, res) => {
+        expect(res.status).to.be.oneOf([401, 404]); 
+        done();
+      });
+  });
+});
