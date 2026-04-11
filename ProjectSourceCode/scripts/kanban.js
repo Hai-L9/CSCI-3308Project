@@ -80,6 +80,8 @@ function createTaskCard(task) {
   taskCard.querySelector('p.task-meta').textContent = `#${task.id} • Due ${formatDate(task.dueDate)}`;
   taskCard.querySelector('.task-assignee').textContent = task.assignee || '';
   taskCard.querySelector('.task-priority').textContent = task.priority;
+  taskCard.querySelector('.btn-edit-task').addEventListener('click', () => openEditModal(task.id));
+
   return taskCard;
 }
 
@@ -106,7 +108,21 @@ function renderTasksByStatus(taskList) {
   });
 }
 
-
+function openEditModal(taskId) {
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return;
+ 
+  document.getElementById('editTaskId').value          = task.id;
+  document.getElementById('editTaskTitle').value       = task.title;
+  document.getElementById('editTaskDescription').value = task.description || '';
+  document.getElementById('editTaskAssignee').value    = task.assignee || '';
+  document.getElementById('editTaskDueDate').value     = task.dueDate || '';
+  document.getElementById('editTaskPriority').value    = task.priority;
+  document.getElementById('editTaskStatus').value      = task.status;
+ 
+  document.getElementById('editTaskForm').classList.remove('was-validated');
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('editTaskModal')).show();
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   tasks = await fetchTasks();
