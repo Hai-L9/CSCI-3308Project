@@ -164,4 +164,56 @@ document.addEventListener('DOMContentLoaded', async () => {
     [titleEl, priorityEl, statusEl].forEach((el) => el.classList.remove('is-invalid'));
     bootstrap.Modal.getInstance(document.getElementById('addTaskModal')).hide();
   });
+
+document.getElementById('updateTaskBtn').addEventListener('click', () => {
+    const form       = document.getElementById('editTaskForm');
+    const titleEl    = document.getElementById('editTaskTitle');
+    const priorityEl = document.getElementById('editTaskPriority');
+    const statusEl   = document.getElementById('editTaskStatus');
+ 
+    let valid = true;
+    [titleEl, priorityEl, statusEl].forEach((el) => {
+      if (!el.value.trim()) {
+        el.classList.add('is-invalid');
+        valid = false;
+      } else {
+        el.classList.remove('is-invalid');
+      }
+    });
+    if (!valid) { form.classList.add('was-validated'); return; }
+ 
+    const id  = parseInt(document.getElementById('editTaskId').value, 10);
+    const idx = tasks.findIndex(t => t.id === id);
+    if (idx === -1) return;
+ 
+    tasks[idx] = {
+      ...tasks[idx],
+      title:       titleEl.value.trim(),
+      description: document.getElementById('editTaskDescription').value.trim(),
+      assignee:    document.getElementById('editTaskAssignee').value.trim(),
+      dueDate:     document.getElementById('editTaskDueDate').value || null,
+      priority:    priorityEl.value,
+      status:      statusEl.value,
+    };
+ 
+    renderTasksByStatus(tasks);
+    bootstrap.Modal.getInstance(document.getElementById('editTaskModal')).hide();
+  });
+ 
+  // Delete Task
+  document.getElementById('deleteTaskBtn').addEventListener('click', () => {
+    const id = parseInt(document.getElementById('editTaskId').value, 10);
+    if (!confirm('Delete this task? This cannot be undone.')) return;
+    tasks = tasks.filter(t => t.id !== id);
+    renderTasksByStatus(tasks);
+    bootstrap.Modal.getInstance(document.getElementById('editTaskModal')).hide();
+  });
+ 
+  // Reset validation on edit modal close
+  document.getElementById('editTaskModal').addEventListener('hidden.bs.modal', () => {
+    document.getElementById('editTaskForm').classList.remove('was-validated');
+    ['editTaskTitle', 'editTaskPriority', 'editTaskStatus'].forEach(id => {
+      document.getElementById(id).classList.remove('is-invalid');
+    });
+  });
 });
