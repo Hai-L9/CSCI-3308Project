@@ -65,13 +65,27 @@ app.get('/welcome', (req, res) => {
 });
 
 // Get tasks
-app.get('/api/tasks', async (req, res) => {
+app.get('/api/tasks', authenticateToken, async (req, res) => {
   try {
-    const tasks = await db.any(`
-      SELECT t.*, w.name AS worksite_name, w.lat AS worksite_lat, w.lng AS worksite_lng
-      FROM tasks t
-      LEFT JOIN worksites w ON w.id = t.worksite_id
-    `);
+    let tasks;
+    if (req.user.role === 'worker') {
+      tasks = await db.any(
+        `SELECT t.*, w.name AS worksite_name, w.lat AS worksite_lat, w.lng AS worksite_lng
+         FROM tasks t
+         LEFT JOIN worksites w ON w.id = t.worksite_id
+         WHERE t.created_by = $1
+            OR t.id IN (
+              SELECT task_id FROM task_assignments WHERE user_id = $1
+            )`,
+        [req.user.id]
+      );
+    } else {
+      tasks = await db.any(
+        `SELECT t.*, w.name AS worksite_name, w.lat AS worksite_lat, w.lng AS worksite_lng
+         FROM tasks t
+         LEFT JOIN worksites w ON w.id = t.worksite_id`
+      );
+    }
     res.json(tasks);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -79,17 +93,10 @@ app.get('/api/tasks', async (req, res) => {
 });
 
 // Create task
-app.post('/api/tasks', authenticateToken, async (req, res) => {
-  let created_by = null;
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.startsWith('Bearer ') && authHeader.slice(7);
-  if (token) {
-    try { created_by = jwt.verify(token, process.env.JWT_SECRET).id; } catch {}
-  }
-
+app.post('/api/tasks', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
   const query = `
     INSERT INTO tasks (title, description, status, due_date, created_by, priority, worksite_id)
-    VALUES ($\{title\}, $\{description\}, $\{status\}, $\{due_date\}, $\{created_by\}, $\{priority\}, $\{worksite_id\})
+    VALUES (\${title}, \${description}, \${status}, \${due_date}, \${created_by}, \${priority}, \${worksite_id})
     RETURNING id, created_at;
   `;
   try {
@@ -98,7 +105,7 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
       description: req.body.description,
       status: req.body.status || 'backlog',
       due_date: req.body.due_date || null,
-      created_by,
+      created_by: req.user.id,
       priority: req.body.priority || 'medium',
       worksite_id: req.body.worksite_id || null,
     });
@@ -109,7 +116,7 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
 });
 
 // Update task
-app.patch('/api/tasks/:id', authenticateToken, async (req, res) => {
+app.patch('/api/tasks/:id', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
   const query = `
     UPDATE tasks
     SET title = \${title}, description = \${description}, status = \${status},
@@ -136,7 +143,7 @@ app.patch('/api/tasks/:id', authenticateToken, async (req, res) => {
 });
 
 // Delete task
-app.delete('/api/tasks/:id', authenticateToken, async (req, res) => {
+app.delete('/api/tasks/:id', authenticateToken, requireRole('admin'), async (req, res) => {
   try {
     const result = await db.result('DELETE FROM tasks WHERE id = $1', [req.params.id]);
     if (result.rowCount === 0) return res.status(404).json({ error: 'Task not found' });
