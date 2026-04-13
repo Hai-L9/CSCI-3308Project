@@ -54,6 +54,16 @@ app.use(session({
   },
 }));
 
+// Routes
+const auth = require('./routes/auth');
+auth.init(pool);
+app.use('/api/auth', auth.router);
+const { authenticateToken } = auth;
+
+const worksites = require('./routes/worksites');
+worksites.init(pool);
+app.use('/api/worksites', worksites.router);
+
 app.get('/api/config', (req, res) => {
   res.json({ googleMapsKey: process.env.GOOGLE_MAPS_API_KEY || '' });
 });
@@ -153,15 +163,6 @@ app.delete('/api/tasks/:id', authenticateToken, requireRole('admin'), async (req
   }
 });
 
-// Routes
-const auth = require('./routes/auth');
-auth.init(pool);
-app.use('/api/auth', auth.router);
-const { authenticateToken } = auth;
-
-const worksites = require('./routes/worksites');
-worksites.init(pool);
-app.use('/api/worksites', worksites.router);
 
 // Start the server
 app.listen(port, () => {
