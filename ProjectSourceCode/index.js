@@ -153,7 +153,7 @@ app.patch('/api/tasks/:id', authenticateToken, requireRole('admin', 'manager'), 
 });
 
 // Delete task
-app.delete('/api/tasks/:id', authenticateToken, requireRole('admin'), async (req, res) => {
+app.delete('/api/tasks/:id', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
   try {
     const result = await db.result('DELETE FROM tasks WHERE id = $1', [req.params.id]);
     if (result.rowCount === 0) return res.status(404).json({ error: 'Task not found' });
