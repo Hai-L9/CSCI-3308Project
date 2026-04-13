@@ -91,7 +91,7 @@
     </main>
 
     <div class="modal fade" id="addTaskModal" tabindex="-1" aria-labelledby="addTaskModalLabel" aria-hidden="true">
-      <div class="modal-dialog">
+      <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="addTaskModalLabel">Add Task</h5>
@@ -137,6 +137,20 @@
                 </select>
                 <div class="invalid-feedback">Please select a status.</div>
               </div>
+              <hr class="my-3" />
+              <div class="mb-2">
+                <label class="form-label fw-semibold">Location <span class="text-secondary fw-normal small">(optional)</span></label>
+                <div id="mapSearchContainer" class="mb-2"></div>
+                <div class="d-flex align-items-center gap-2 mb-2">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="togglePinModeBtn">Drop a Pin</button>
+                  <button type="button" class="btn btn-sm btn-outline-danger d-none" id="clearLocationBtn">Clear</button>
+                  <span id="selectedLocationLabel" class="text-secondary small"></span>
+                </div>
+                <p id="mapHint" class="text-secondary small mb-1">Search above or click <strong>Drop a Pin</strong> then click the map to set a location.</p>
+                <div style="height:260px; border-radius:6px; overflow:hidden; border:1px solid #dee2e6;">
+                  <div id="taskMap" style="height:100%;"></div>
+                </div>
+              </div>
             </form>
           </div>
           <div class="modal-footer">
@@ -148,7 +162,7 @@
     </div>
 
     <div class="modal fade" id="editTaskModal" tabindex="-1" aria-labelledby="editTaskModalLabel" aria-hidden="true">
-      <div class="modal-dialog">
+      <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="editTaskModalLabel">Edit Task</h5>
@@ -178,9 +192,9 @@
                 <label for="editTaskPriority" class="form-label">Priority <span class="text-danger">*</span></label>
                 <select class="form-select" id="editTaskPriority" required>
                   <option value="" disabled>Select priority</option>
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
-                  <option value="High">High</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
                 </select>
                 <div class="invalid-feedback">Please select a priority.</div>
               </div>
@@ -194,6 +208,20 @@
                   <option value="done">Done</option>
                 </select>
                 <div class="invalid-feedback">Please select a status.</div>
+              </div>
+              <hr class="my-3" />
+              <div class="mb-2">
+                <label class="form-label fw-semibold">Location <span class="text-secondary fw-normal small">(optional)</span></label>
+                <div id="editMapSearchContainer" class="mb-2"></div>
+                <div class="d-flex align-items-center gap-2 mb-2">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="editTogglePinModeBtn">Drop a Pin</button>
+                  <button type="button" class="btn btn-sm btn-outline-danger d-none" id="editClearLocationBtn">Clear</button>
+                  <span id="editSelectedLocationLabel" class="text-secondary small"></span>
+                </div>
+                <p id="editMapHint" class="text-secondary small mb-1">Search above or click <strong>Drop a Pin</strong> then click the map to set a location.</p>
+                <div style="height:260px; border-radius:6px; overflow:hidden; border:1px solid #dee2e6;">
+                  <div id="editTaskMap" style="height:100%;"></div>
+                </div>
               </div>
             </form>
           </div>
@@ -209,6 +237,15 @@
     </div>
 
 
+    <div id="toastContainer" aria-live="polite">
+      <div id="errorToast" class="toast align-items-center text-bg-danger border-0" role="alert">
+        <div class="d-flex">
+          <div class="toast-body" id="toastMessage">An error occurred.</div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+      </div>
+    </div>
+
     <template id="taskCardTemplate">
       <article class="card shadow-sm mb-2 task-card">
         <div class="card-body py-2 px-3">
@@ -218,8 +255,9 @@
           </div>
           <p class="task-description text-secondary mb-1"></p>
           <p class="task-meta text-secondary mb-1"></p>
-          <div class="d-flex justify-content-between align-items-center task-meta text-secondary">
-            <span class="task-assignee"></span>
+          <span class="task-assignee task-meta text-secondary d-block"></span>
+          <span class="task-location text-secondary d-none" style="font-size:0.75rem;"></span>
+          <div class="text-end mt-1">
             <span class="task-priority badge text-bg-light border"></span>
           </div>
         </div>
@@ -231,6 +269,8 @@
       integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
       crossorigin="anonymous"
     ></script>
+    <style>.pac-container { z-index: 9999 !important; }</style>
+    <script src="../scripts/map.js"></script>
     <script src="../scripts/kanban.js"></script>
   </body>
 </html>

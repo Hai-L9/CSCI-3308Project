@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS worksites (
     address    TEXT,
     city       VARCHAR(100),
     state      VARCHAR(50),
+    lat        NUMERIC(10,7),
+    lng        NUMERIC(10,7),
     is_active  BOOLEAN      NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP    NOT NULL DEFAULT NOW()
 );
@@ -38,7 +40,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     priority    VARCHAR(10)  NOT NULL DEFAULT 'medium'
                     CHECK (priority IN ('low', 'medium', 'high')),
     assignee    VARCHAR(100),
-    created_by  INT          NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    created_by  INT          REFERENCES users(id) ON DELETE SET NULL,
     worksite_id INT          REFERENCES worksites(id) ON DELETE SET NULL,
     due_date    TIMESTAMP,
     created_at  TIMESTAMP    NOT NULL DEFAULT NOW()

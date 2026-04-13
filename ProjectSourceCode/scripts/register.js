@@ -14,9 +14,8 @@ async function apiRegister(username, email, password) {
 
 function onSuccess(data) {
   localStorage.setItem('token', data.token);
-  // Give a small delay to show success message before redirect
   setTimeout(() => {
-    window.location.href = '/pages/login.html'; // In reality you could go to /dashboard, but going to login or staying logged in works. Let's go to /dashboard.
+    window.location.href = '/';
   }, 1000);
 }
 
