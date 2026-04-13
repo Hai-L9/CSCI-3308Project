@@ -58,6 +58,12 @@ app.get('/api/config', (req, res) => {
   res.json({ googleMapsKey: process.env.GOOGLE_MAPS_API_KEY || '' });
 });
 
+// Routes
+const auth = require('./routes/auth');
+auth.init(pool);
+app.use('/api/auth', auth.router);
+const { authenticateToken } = auth;
+
 // Welcome route
 app.get('/welcome', (req, res) => {
   req.session.visits = (req.session.visits || 0) + 1;
@@ -79,7 +85,7 @@ app.get('/api/tasks', async (req, res) => {
 });
 
 // Create task
-app.post('/api/tasks', authenticateToken, async (req, res) => {
+app.post('/api/tasks', async (req, res) => {
   let created_by = null;
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.startsWith('Bearer ') && authHeader.slice(7);
@@ -109,7 +115,7 @@ app.post('/api/tasks', authenticateToken, async (req, res) => {
 });
 
 // Update task
-app.patch('/api/tasks/:id', authenticateToken, async (req, res) => {
+app.patch('/api/tasks/:id', async (req, res) => {
   const query = `
     UPDATE tasks
     SET title = \${title}, description = \${description}, status = \${status},
@@ -136,7 +142,7 @@ app.patch('/api/tasks/:id', authenticateToken, async (req, res) => {
 });
 
 // Delete task
-app.delete('/api/tasks/:id', authenticateToken, async (req, res) => {
+app.delete('/api/tasks/:id', async (req, res) => {
   try {
     const result = await db.result('DELETE FROM tasks WHERE id = $1', [req.params.id]);
     if (result.rowCount === 0) return res.status(404).json({ error: 'Task not found' });
@@ -145,12 +151,6 @@ app.delete('/api/tasks/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to delete task' });
   }
 });
-
-// Routes
-const auth = require('./routes/auth');
-auth.init(pool);
-app.use('/api/auth', auth.router);
-const { authenticateToken } = auth;
 
 const worksites = require('./routes/worksites');
 worksites.init(pool);
