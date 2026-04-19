@@ -5,6 +5,7 @@
   const links = [
     { label: 'Home', href: '/' },
     { label: 'Tasks', href: '/pages/kanban.html' },
+    { label: 'Map', href: '/pages/map.html' },
   ];
   const SERVICE_STATUS_INTERVAL_MS = 30000;
   const SERVICE_STATUS_HISTORY_LIMIT = 24;

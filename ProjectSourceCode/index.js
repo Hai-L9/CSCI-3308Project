@@ -184,6 +184,34 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/tasks/map', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
+  try {
+    const tasks = await db.any(
+      `SELECT
+         t.id,
+         t.title,
+         t.description,
+         t.status,
+         t.priority,
+         t.assignee,
+         t.due_date,
+         w.id AS worksite_id,
+         w.name AS worksite_name,
+         w.address AS worksite_address,
+         w.lat AS worksite_lat,
+         w.lng AS worksite_lng
+       FROM tasks t
+       INNER JOIN worksites w ON w.id = t.worksite_id
+       WHERE w.lat IS NOT NULL
+         AND w.lng IS NOT NULL
+       ORDER BY t.due_date NULLS LAST, t.priority DESC, t.title`
+    );
+    res.json(tasks);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Create task — managers and admins only
 app.post('/api/tasks', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
   const query = `

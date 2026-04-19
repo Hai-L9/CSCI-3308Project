@@ -20,6 +20,16 @@ window.TaskMap = (() => {
     });
   }
 
+  async function loadGoogleMaps() {
+    const key = await fetchApiKey();
+    if (!key) {
+      console.warn('no maps API key configured');
+      return false;
+    }
+    await loadMapsScript(key);
+    return true;
+  }
+
   function create({ mapElId, searchContainerId, pinBtnId, clearBtnId, labelId, hintId }) {
     let map = null;
     let marker = null;
@@ -114,9 +124,8 @@ window.TaskMap = (() => {
     }
 
     async function init() {
-      const key = await fetchApiKey();
-      if (!key) { console.warn('no maps API key configured'); return; }
-      await loadMapsScript(key);
+      const loaded = await loadGoogleMaps();
+      if (!loaded) return;
       if (!map) {
         await initMap();
         await initPlaces();
@@ -140,5 +149,5 @@ window.TaskMap = (() => {
     return { init, getSelection, setLocation, reset };
   }
 
-  return { create };
+  return { create, loadGoogleMaps };
 })();
