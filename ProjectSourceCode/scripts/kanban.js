@@ -28,7 +28,11 @@ function handleUnauthorized(response) {
   if (response.status === 401) {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    window.location.href = '/pages/login.html';
+    if (window.AppNavbar) {
+      window.AppNavbar.openLogin();
+    } else {
+      window.location.href = '/?login=1';
+    }
   }
 }
 

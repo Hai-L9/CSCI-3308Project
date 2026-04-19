@@ -16,41 +16,7 @@
     />
   </head>
   <body class="bg-light text-dark">
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
-      <div class="container">
-        <a class="navbar-brand fw-bold" href="#">Task Tracker 0.0.2</a>
-        <button
-          class="navbar-toggler"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#mainNavbar"
-          aria-controls="mainNavbar"
-          aria-expanded="false"
-          aria-label="Toggle navigation"
-        >
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse justify-content-end" id="mainNavbar">
-          <ul class="navbar-nav align-items-lg-center gap-2">
-            <li class="nav-item">
-              <a class="btn btn-light btn-sm fw-semibold" href="pages/login.html">Login</a>
-            </li>
-            <li class="nav-item">
-              <a class="btn btn-outline-light btn-sm fw-semibold" href="pages/register.html">Register</a>
-            </li>
-            <li class="nav-item">
-              <a class="btn btn-outline-light btn-sm fw-semibold" href="pages/kanban.html">Tasks</a>
-            </li>
-            <li class="nav-item">
-              <button class="btn btn-outline-light btn-sm fw-semibold" type="button">Service Status</button>
-            </li>
-            <li class="nav-item ms-lg-2">
-              <span class="navbar-text text-white-50">Team Choo Choo Trains</span>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </nav>
+    <div data-app-navbar></div>
 
     <header class="py-5 bg-white border-bottom">
       <div class="container">
@@ -157,48 +123,7 @@
       integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
       crossorigin="anonymous"
     ></script>
+    <script src="scripts/navbar.js"></script>
     <script src="scripts/notifications.js"></script>
-    <script>
-      document.addEventListener('DOMContentLoaded', async () => {
-        const token = localStorage.getItem('token');
-        if (token) {
-          try {
-            const res = await fetch('/api/auth/get-user', {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-              const data = await res.json();
-              const username = data.user.username;
-              
-              // Hide login/register
-              const loginBtn = document.querySelector('a[href="pages/login.html"]')?.parentElement;
-              const registerBtn = document.querySelector('a[href="pages/register.html"]')?.parentElement;
-              if (loginBtn) loginBtn.style.display = 'none';
-              if (registerBtn) registerBtn.style.display = 'none';
-
-              // Show User
-              const navBar = document.querySelector('.navbar-nav');
-              
-              const userLi = document.createElement('li');
-              userLi.className = 'nav-item d-flex align-items-center gap-2 ms-lg-3';
-              userLi.innerHTML = `
-                <span class="text-white fw-semibold">Hello, ${username}</span>
-                <button class="btn btn-sm btn-outline-danger" id="logoutBtn">Logout</button>
-              `;
-              navBar.appendChild(userLi);
-
-              document.getElementById('logoutBtn').addEventListener('click', () => {
-                localStorage.removeItem('token');
-                window.location.reload();
-              });
-            } else {
-              localStorage.removeItem('token');
-            }
-          } catch (e) {
-            console.error('Failed to fetch user', e);
-          }
-        }
-      });
-    </script>
   </body>
 </html>

@@ -167,7 +167,11 @@ const TaskNotifications = (() => {
     }
   }
 
+  let initialized = false;
+
   function init() {
+    if (initialized) return;
+    initialized = true;
     injectBell();
     checkTasks();
     setInterval(checkTasks, 60 * 1000);
@@ -176,4 +180,11 @@ const TaskNotifications = (() => {
   return { init };
 })();
 
-document.addEventListener('DOMContentLoaded', () => TaskNotifications.init());
+document.addEventListener('DOMContentLoaded', () => {
+  if (document.querySelector('.navbar-nav')) {
+    TaskNotifications.init();
+    return;
+  }
+
+  document.addEventListener('app-navbar:ready', () => TaskNotifications.init(), { once: true });
+});

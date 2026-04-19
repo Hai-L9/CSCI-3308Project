@@ -11,6 +11,7 @@ if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET is not set');
 
 const app = express();
 const port = process.env.PORT || 3000;
+const serviceStatusHistoryKey = new Date().toISOString();
 
 const pool = new Pool({
   user: process.env.POSTGRES_USER,
@@ -19,6 +20,73 @@ const pool = new Pool({
   database: process.env.POSTGRES_DB,
   port: process.env.POSTGRES_PORT || 5432,
 });
+
+async function checkDatabaseStatus() {
+  const start = Date.now();
+  try {
+    await pool.query('SELECT 1');
+    return {
+      status: 'ok',
+      responseTimeMs: Date.now() - start,
+      message: 'Connected',
+    };
+  } catch (err) {
+    return {
+      status: 'error',
+      responseTimeMs: Date.now() - start,
+      message: err.message,
+    };
+  }
+}
+
+async function checkGoogleMapsStatus() {
+  const start = Date.now();
+  const key = process.env.GOOGLE_MAPS_API_KEY;
+  if (!key) {
+    return {
+      status: 'missing',
+      responseTimeMs: 0,
+      message: 'GOOGLE_MAPS_API_KEY is not configured',
+    };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const url = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&callback=__serviceStatusCheck`;
+    const response = await fetch(url, { signal: controller.signal });
+    const body = await response.text();
+    const knownErrors = [
+      'ApiNotActivatedMapError',
+      'BillingNotEnabledMapError',
+      'DeletedApiProjectMapError',
+      'ExpiredKeyMapError',
+      'InvalidKeyMapError',
+      'RefererNotAllowedMapError',
+      'RequestDeniedMapError',
+    ];
+    const mapsError = knownErrors.find((errorCode) => body.includes(errorCode));
+
+    return {
+      status: response.ok && !mapsError ? 'ok' : 'error',
+      responseTimeMs: Date.now() - start,
+      message: mapsError
+        ? mapsError
+        : response.ok
+          ? 'Reachable'
+          : `Google Maps returned HTTP ${response.status}`,
+    };
+  } catch (err) {
+    return {
+      status: 'error',
+      responseTimeMs: Date.now() - start,
+      message: err.name === 'AbortError' ? 'Google Maps status check timed out' : err.message,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 app.use(express.json());
 
@@ -63,6 +131,25 @@ app.use('/api/worksites', worksites.router);
 
 app.get('/api/config', (req, res) => {
   res.json({ googleMapsKey: process.env.GOOGLE_MAPS_API_KEY || '' });
+});
+
+app.get('/api/service-status', async (req, res) => {
+  const checkedAt = new Date().toISOString();
+  const [database, googleMaps] = await Promise.all([
+    checkDatabaseStatus(),
+    checkGoogleMapsStatus(),
+  ]);
+  const healthy = database.status === 'ok' && googleMaps.status === 'ok';
+
+  res.status(healthy ? 200 : 503).json({
+    status: healthy ? 'ok' : 'degraded',
+    checkedAt,
+    statusHistoryKey: serviceStatusHistoryKey,
+    services: {
+      database,
+      googleMaps,
+    },
+  });
 });
 
 // Welcome route
