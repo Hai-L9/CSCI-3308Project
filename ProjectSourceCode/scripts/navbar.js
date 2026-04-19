@@ -49,10 +49,26 @@
     li.className = 'nav-item';
 
     const button = document.createElement('button');
-    button.className = 'btn btn-light btn-sm fw-semibold';
+    const isLoginActive = new URLSearchParams(window.location.search).get('login') === '1';
+    button.className = `btn btn-sm fw-semibold ${isLoginActive ? 'btn-light' : 'btn-outline-light'}`;
     button.type = 'button';
     button.textContent = 'Login';
     button.addEventListener('click', openLoginModal);
+
+    li.appendChild(button);
+    return li;
+  }
+
+  function createRegisterButton() {
+    const li = document.createElement('li');
+    li.className = 'nav-item';
+
+    const button = document.createElement('button');
+    const isRegisterActive = new URLSearchParams(window.location.search).get('register') === '1';
+    button.className = `btn btn-sm fw-semibold ${isRegisterActive ? 'btn-light' : 'btn-outline-light'}`;
+    button.type = 'button';
+    button.textContent = 'Register';
+    button.addEventListener('click', openRegisterModal);
 
     li.appendChild(button);
     return li;
@@ -157,7 +173,7 @@
       list.appendChild(createUserItem(user));
     } else {
       list.appendChild(createLoginButton());
-      list.appendChild(createAuthLink('Register', '/pages/register.html'));
+      list.appendChild(createRegisterButton());
     }
 
     const statusItem = document.createElement('li');
@@ -492,10 +508,60 @@
               </div>
             </div>
             <div class="modal-footer d-flex justify-content-between">
-              <a href="/pages/register.html" class="small">Create an account</a>
+              <a href="/?register=1" class="small" data-register-trigger>Create an account</a>
               <div class="d-flex gap-2">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="submit" class="btn btn-primary" id="navbarLoginSubmit">Log in</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+
+    return modal;
+  }
+
+  function buildRegisterModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.id = 'registerModal';
+    modal.tabIndex = -1;
+    modal.setAttribute('aria-labelledby', 'registerModalLabel');
+    modal.setAttribute('aria-hidden', 'true');
+    modal.innerHTML = `
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="registerModalLabel">Create account</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <form id="navbarRegisterForm" novalidate>
+            <div class="modal-body">
+              <div class="alert alert-danger d-none" id="navbarRegisterError" role="alert">
+                Registration failed. Please try again.
+              </div>
+              <div class="mb-3">
+                <label for="navbarRegisterUsername" class="form-label">Username</label>
+                <input type="text" class="form-control" id="navbarRegisterUsername" autocomplete="username" required />
+                <div class="invalid-feedback">Please enter a username.</div>
+              </div>
+              <div class="mb-3">
+                <label for="navbarRegisterEmail" class="form-label">Email</label>
+                <input type="email" class="form-control" id="navbarRegisterEmail" autocomplete="email" required />
+                <div class="invalid-feedback">Please enter a valid email.</div>
+              </div>
+              <div class="mb-0">
+                <label for="navbarRegisterPassword" class="form-label">Password</label>
+                <input type="password" class="form-control" id="navbarRegisterPassword" autocomplete="new-password" required />
+                <div class="invalid-feedback">Please enter a password.</div>
+              </div>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+              <a href="/?login=1" class="small" data-login-trigger>Already have an account?</a>
+              <div class="d-flex gap-2">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="navbarRegisterSubmit">Create account</button>
               </div>
             </div>
           </form>
@@ -516,12 +582,33 @@
     return modal;
   }
 
+  function ensureRegisterModal() {
+    let modal = document.getElementById('registerModal');
+    if (!modal) {
+      modal = buildRegisterModal();
+      document.body.appendChild(modal);
+      attachRegisterFormHandler();
+    }
+    return modal;
+  }
+
   function openLoginModal() {
     const modal = ensureLoginModal();
     if (!window.bootstrap) {
       window.location.href = '/?login=1';
       return;
     }
+    window.bootstrap.Modal.getInstance(document.getElementById('registerModal'))?.hide();
+    window.bootstrap.Modal.getOrCreateInstance(modal).show();
+  }
+
+  function openRegisterModal() {
+    const modal = ensureRegisterModal();
+    if (!window.bootstrap) {
+      window.location.href = '/?register=1';
+      return;
+    }
+    window.bootstrap.Modal.getInstance(document.getElementById('loginModal'))?.hide();
     window.bootstrap.Modal.getOrCreateInstance(modal).show();
   }
 
@@ -532,6 +619,19 @@
       body: JSON.stringify({ email, password }),
     });
     if (!res.ok) throw new Error('Login failed');
+    return res.json();
+  }
+
+  async function apiRegister(username, email, password) {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password }),
+    });
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Registration failed');
+    }
     return res.json();
   }
 
@@ -573,6 +673,48 @@
     });
   }
 
+  function attachRegisterFormHandler() {
+    const form = document.getElementById('navbarRegisterForm');
+    const username = document.getElementById('navbarRegisterUsername');
+    const email = document.getElementById('navbarRegisterEmail');
+    const password = document.getElementById('navbarRegisterPassword');
+    const error = document.getElementById('navbarRegisterError');
+    const submit = document.getElementById('navbarRegisterSubmit');
+    if (!form || form.dataset.bound === 'true') return;
+
+    form.dataset.bound = 'true';
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      error.classList.add('d-none');
+
+      const usernameValid = Boolean(username.value.trim());
+      const emailValid = email.value.trim() && /\S+@\S+\.\S+/.test(email.value);
+      const passwordValid = Boolean(password.value);
+      username.classList.toggle('is-invalid', !usernameValid);
+      email.classList.toggle('is-invalid', !emailValid);
+      password.classList.toggle('is-invalid', !passwordValid);
+      if (!usernameValid || !emailValid || !passwordValid) return;
+
+      submit.disabled = true;
+      submit.textContent = 'Creating...';
+
+      try {
+        const data = await apiRegister(username.value.trim(), email.value.trim(), password.value);
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        window.bootstrap.Modal.getInstance(document.getElementById('registerModal'))?.hide();
+        await renderNavbar();
+        window.location.reload();
+      } catch (err) {
+        error.textContent = err.message || 'Registration failed. Please try again.';
+        error.classList.remove('d-none');
+      } finally {
+        submit.disabled = false;
+        submit.textContent = 'Create account';
+      }
+    });
+  }
+
   async function renderNavbar() {
     const mount = document.querySelector('[data-app-navbar]');
     if (!mount) return;
@@ -580,11 +722,15 @@
     const user = await getCurrentUser();
     mount.replaceChildren(buildNavbar(user));
     ensureLoginModal();
+    ensureRegisterModal();
     ensureServiceStatusModal();
     document.dispatchEvent(new CustomEvent('app-navbar:ready'));
 
     if (new URLSearchParams(window.location.search).get('login') === '1' && !user) {
       openLoginModal();
+    }
+    if (new URLSearchParams(window.location.search).get('register') === '1' && !user) {
+      openRegisterModal();
     }
   }
 
@@ -595,8 +741,15 @@
     openLoginModal();
   });
 
+  document.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-register-trigger]');
+    if (!trigger) return;
+    event.preventDefault();
+    openRegisterModal();
+  });
+
   document.addEventListener('app-login-required', openLoginModal);
-  window.AppNavbar = { openLogin: openLoginModal };
+  window.AppNavbar = { openLogin: openLoginModal, openRegister: openRegisterModal };
 
   document.addEventListener('DOMContentLoaded', renderNavbar);
 })();
