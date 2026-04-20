@@ -490,6 +490,28 @@ function openViewModal(taskId) {
     setTimeout(() => openEditModal(taskId), 200);
   };
 
+  const historySection = document.getElementById('viewTaskWorksiteHistorySection');
+  const historyList = document.getElementById('viewTaskWorksiteHistory');
+  historySection.classList.add('d-none');
+  historyList.innerHTML = '';
+
+  fetch(`/api/tasks/${taskId}/worksite-history`, { headers: authHeaders() })
+    .then(r => r.ok ? r.json() : [])
+    .then(history => {
+      if (!history.length) return;
+      history.forEach(entry => {
+        const li = document.createElement('li');
+        li.className = 'text-secondary';
+        const date = new Date(entry.changed_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+        const location = entry.worksite_name
+          ? `${entry.worksite_name}${entry.city ? `, ${entry.city}` : ''}`
+          : 'Removed';
+        li.textContent = `${date} — ${location}`;
+        historyList.appendChild(li);
+      });
+      historySection.classList.remove('d-none');
+    });
+
   bootstrap.Modal.getOrCreateInstance(document.getElementById('viewTaskModal')).show();
 }
 

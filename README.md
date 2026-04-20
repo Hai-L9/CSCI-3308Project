@@ -176,6 +176,7 @@ GET     /api/tasks/map
 POST    /api/tasks
 PATCH   /api/tasks/:id
 DELETE  /api/tasks/:id
+GET     /api/tasks/:id/worksite-history
 ```
 
 > Worksites
@@ -204,6 +205,7 @@ Core tables:
 - `tasks`
 - `worksites`
 - `task_assignments`
+- `task_worksite_history`
 - `session`
 
 The Docker Postgres volume is named `group-project`.

@@ -214,21 +214,28 @@ app.get('/api/tasks/map', authenticateToken, requireRole('admin', 'manager'), as
 
 // Create task — managers and admins only
 app.post('/api/tasks', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
-  const query = `
-    INSERT INTO tasks (title, description, status, due_date, created_by, priority, worksite_id)
-    VALUES (\${title}, \${description}, \${status}, \${due_date}, \${created_by}, \${priority}, \${worksite_id})
-    RETURNING id, created_at;
-  `;
+  const worksite_id = req.body.worksite_id || null;
   try {
-    const result = await db.one(query, {
-      title: req.body.title,
-      description: req.body.description,
-      status: req.body.status || 'backlog',
-      due_date: req.body.due_date || null,
-      created_by: req.user.id,
-      priority: req.body.priority || 'medium',
-      worksite_id: req.body.worksite_id || null,
-    });
+    const result = await db.one(
+      `INSERT INTO tasks (title, description, status, due_date, created_by, priority, worksite_id)
+       VALUES (\${title}, \${description}, \${status}, \${due_date}, \${created_by}, \${priority}, \${worksite_id})
+       RETURNING id, created_at`,
+      {
+        title: req.body.title,
+        description: req.body.description,
+        status: req.body.status || 'backlog',
+        due_date: req.body.due_date || null,
+        created_by: req.user.id,
+        priority: req.body.priority || 'medium',
+        worksite_id,
+      }
+    );
+    if (worksite_id) {
+      await db.none(
+        'INSERT INTO task_worksite_history (task_id, worksite_id) VALUES ($1, $2)',
+        [result.id, worksite_id]
+      );
+    }
     res.status(201).json(result);
   } catch (err) {
     res.status(500).json({ error: 'Failed to create task' });
@@ -237,28 +244,57 @@ app.post('/api/tasks', authenticateToken, requireRole('admin', 'manager'), async
 
 // Update task — managers and admins only
 app.patch('/api/tasks/:id', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
-  const query = `
-    UPDATE tasks
-    SET title = \${title}, description = \${description}, status = \${status},
-        due_date = \${due_date}, assignee = \${assignee}, priority = \${priority},
-        worksite_id = \${worksite_id}
-    WHERE id = \${id}
-  `;
+  const taskId = parseInt(req.params.id);
+  const new_worksite_id = req.body.worksite_id ?? null;
   try {
-    const result = await db.result(query, {
-      id: parseInt(req.params.id),
-      title: req.body.title,
-      description: req.body.description || null,
-      status: req.body.status,
-      due_date: req.body.due_date || null,
-      assignee: req.body.assignee || null,
-      priority: req.body.priority,
-      worksite_id: req.body.worksite_id ?? null,
-    });
-    if (result.rowCount === 0) return res.status(404).json({ error: 'Task not found' });
+    const current = await db.oneOrNone('SELECT worksite_id FROM tasks WHERE id = $1', [taskId]);
+    if (!current) return res.status(404).json({ error: 'Task not found' });
+
+    await db.none(
+      `UPDATE tasks
+       SET title = \${title}, description = \${description}, status = \${status},
+           due_date = \${due_date}, assignee = \${assignee}, priority = \${priority},
+           worksite_id = \${worksite_id}
+       WHERE id = \${id}`,
+      {
+        id: taskId,
+        title: req.body.title,
+        description: req.body.description || null,
+        status: req.body.status,
+        due_date: req.body.due_date || null,
+        assignee: req.body.assignee || null,
+        priority: req.body.priority,
+        worksite_id: new_worksite_id,
+      }
+    );
+
+    if (new_worksite_id !== current.worksite_id) {
+      await db.none(
+        'INSERT INTO task_worksite_history (task_id, worksite_id) VALUES ($1, $2)',
+        [taskId, new_worksite_id]
+      );
+    }
+
     res.status(200).json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update task' });
+  }
+});
+
+// Get worksite history for a task
+app.get('/api/tasks/:id/worksite-history', authenticateToken, async (req, res) => {
+  try {
+    const history = await db.any(
+      `SELECT twh.changed_at, w.name AS worksite_name, w.address, w.city, w.state
+       FROM task_worksite_history twh
+       LEFT JOIN worksites w ON w.id = twh.worksite_id
+       WHERE twh.task_id = $1
+       ORDER BY twh.changed_at DESC`,
+      [parseInt(req.params.id)]
+    );
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch worksite history' });
   }
 });
 

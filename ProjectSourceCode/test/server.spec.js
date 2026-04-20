@@ -1,4 +1,6 @@
 const server = require('../index');
+const jwt = require('jsonwebtoken');
+const db = require('../src/resources/db');
 
 const chai = require('chai');
 const chaiHttp = require('chai-http');
@@ -49,7 +51,11 @@ describe('Session Persistence', () => {
 // ---- Register API ----
 
 describe('Register API', () => {
-  // unique user 
+  after(done => {
+    db.none('DELETE FROM users WHERE email = ANY($1)', [[`user${TS}@test.com`, `dup${TS}@test.com`]])
+      .then(() => done()).catch(done);
+  });
+
   it('Returns 201 for a valid registration', done => {
     chai
       .request(server)
@@ -63,10 +69,8 @@ describe('Register API', () => {
       });
   });
 
-  // duplicate user
   it('Returns 409 for a duplicate user', done => {
     const payload = { username: `dup${TS}`, email: `dup${TS}@test.com`, password: 'password123' };
-    // Register once, then again — second must always be 409
     chai.request(server).post('/api/auth/register').send(payload).end(() => {
       chai
         .request(server)
@@ -79,7 +83,6 @@ describe('Register API', () => {
     });
   });
 
-  // missing fields 
   it('Returns 400 when required fields are missing', done => {
     chai
       .request(server)
@@ -101,7 +104,11 @@ describe('Login API', () => {
     chai.request(server).post('/api/auth/register').send(loginUser).end(() => done());
   });
 
-  // valid user + pass
+  after(done => {
+    db.none('DELETE FROM users WHERE email = $1', [loginUser.email])
+      .then(() => done()).catch(done);
+  });
+
   it('Returns 200 and a token for valid credentials', done => {
     chai
       .request(server)
@@ -114,7 +121,6 @@ describe('Login API', () => {
       });
   });
 
-  //  wrong password
   it('Returns 401 for invalid credentials', done => {
     chai
       .request(server)
@@ -126,7 +132,6 @@ describe('Login API', () => {
       });
   });
 
-  // missing fields
   it('Returns 400 when fields are missing', done => {
     chai
       .request(server)
@@ -152,7 +157,11 @@ describe('Get User API', () => {
     });
   });
 
-  // valid token
+  after(done => {
+    db.none('DELETE FROM users WHERE email = $1', [`getuser${TS}@test.com`])
+      .then(() => done()).catch(done);
+  });
+
   it('Returns 200 with user data for a valid token', done => {
     chai
       .request(server)
@@ -165,7 +174,6 @@ describe('Get User API', () => {
       });
   });
 
-  // no token
   it('Returns 401 when no token is provided', done => {
     chai
       .request(server)
@@ -176,7 +184,6 @@ describe('Get User API', () => {
       });
   });
 
-  // malformed token
   it('Returns 401 for a malformed token', done => {
     chai
       .request(server)
@@ -204,9 +211,31 @@ describe('Config API', () => {
   });
 });
 
+// ---- Service Status API ----
+
+describe('Service Status API', () => {
+  it('Returns a status object with service health details', done => {
+    chai
+      .request(server)
+      .get('/api/service-status')
+      .end((err, res) => {
+        expect(res.status).to.be.oneOf([200, 503]);
+        expect(res.body).to.have.property('status');
+        expect(res.body).to.have.property('services');
+        expect(res.body.services).to.have.property('database');
+        done();
+      });
+  });
+});
+
 // ---- Worksites API ----
 
 describe('Worksites API', () => {
+  after(done => {
+    db.none('DELETE FROM worksites WHERE name = ANY($1)', [[`Test Worksite ${TS}`, `DB Test Worksite ${TS}`]])
+      .then(() => done()).catch(done);
+  });
+
   it('Returns 201 and an id when creating a valid worksite', done => {
     chai
       .request(server)
@@ -266,10 +295,29 @@ describe('Worksites API', () => {
 // ---- Tasks API ----
 
 describe('Tasks API', () => {
+  let managerToken;
+
+  before(done => {
+    // Register a real user so created_by FK is satisfied, then mint a manager token with their ID
+    const user = { username: `taskuser${TS}`, email: `taskuser${TS}@test.com`, password: 'password123' };
+    chai.request(server).post('/api/auth/register').send(user).end((err, res) => {
+      const userId = res.body.user.id;
+      managerToken = jwt.sign({ id: userId, role: 'manager' }, process.env.JWT_SECRET, { expiresIn: '1h' });
+      done();
+    });
+  });
+
+  after(done => {
+    db.none(`DELETE FROM tasks WHERE title LIKE $1`, [`%${TS}`])
+      .then(() => db.none('DELETE FROM users WHERE email = $1', [`taskuser${TS}@test.com`]))
+      .then(() => done()).catch(done);
+  });
+
   it('Returns 200 and an array from GET /api/tasks', done => {
     chai
       .request(server)
       .get('/api/tasks')
+      .set('Authorization', `Bearer ${managerToken}`)
       .end((err, res) => {
         expect(res).to.have.status(200);
         expect(res.body).to.be.an('array');
@@ -281,6 +329,7 @@ describe('Tasks API', () => {
     chai
       .request(server)
       .post('/api/tasks')
+      .set('Authorization', `Bearer ${managerToken}`)
       .send({ title: `Test Task ${TS}`, status: 'backlog', priority: 'medium' })
       .end((err, res) => {
         expect(res).to.have.status(201);
@@ -293,11 +342,13 @@ describe('Tasks API', () => {
     const title = `Visible Task ${TS}`;
     chai.request(server)
       .post('/api/tasks')
+      .set('Authorization', `Bearer ${managerToken}`)
       .send({ title, status: 'in-progress', priority: 'high' })
       .end((err, res) => {
         expect(res).to.have.status(201);
         chai.request(server)
           .get('/api/tasks')
+          .set('Authorization', `Bearer ${managerToken}`)
           .end((err2, res2) => {
             expect(res2).to.have.status(200);
             expect(res2.body.some(t => t.title === title)).to.be.true;
@@ -306,15 +357,80 @@ describe('Tasks API', () => {
       });
   });
 
+  it('Returns 200 when updating an existing task', done => {
+    chai.request(server)
+      .post('/api/tasks')
+      .set('Authorization', `Bearer ${managerToken}`)
+      .send({ title: `Patch Me ${TS}`, status: 'backlog', priority: 'low' })
+      .end((err, res) => {
+        expect(res).to.have.status(201);
+        const id = res.body.id;
+        chai.request(server)
+          .patch(`/api/tasks/${id}`)
+          .set('Authorization', `Bearer ${managerToken}`)
+          .send({ title: `Patch Me ${TS}`, status: 'in-progress', priority: 'high' })
+          .end((err2, res2) => {
+            expect(res2).to.have.status(200);
+            expect(res2.body.success).to.be.true;
+            done();
+          });
+      });
+  });
+
+  it('Returns 404 when updating a non-existent task', done => {
+    chai
+      .request(server)
+      .patch('/api/tasks/999999')
+      .set('Authorization', `Bearer ${managerToken}`)
+      .send({ title: 'ghost', status: 'backlog', priority: 'low' })
+      .end((err, res) => {
+        expect(res).to.have.status(404);
+        done();
+      });
+  });
+
+  it('Returns 200 and an array from GET /api/tasks/map', done => {
+    chai
+      .request(server)
+      .get('/api/tasks/map')
+      .set('Authorization', `Bearer ${managerToken}`)
+      .end((err, res) => {
+        expect(res).to.have.status(200);
+        expect(res.body).to.be.an('array');
+        done();
+      });
+  });
+
+  it('Returns 200 and an array from GET /api/tasks/:id/worksite-history', done => {
+    chai.request(server)
+      .post('/api/tasks')
+      .set('Authorization', `Bearer ${managerToken}`)
+      .send({ title: `History Task ${TS}`, status: 'backlog', priority: 'low' })
+      .end((err, res) => {
+        expect(res).to.have.status(201);
+        const id = res.body.id;
+        chai.request(server)
+          .get(`/api/tasks/${id}/worksite-history`)
+          .set('Authorization', `Bearer ${managerToken}`)
+          .end((err2, res2) => {
+            expect(res2).to.have.status(200);
+            expect(res2.body).to.be.an('array');
+            done();
+          });
+      });
+  });
+
   it('Returns 204 when deleting an existing task', done => {
     chai.request(server)
       .post('/api/tasks')
+      .set('Authorization', `Bearer ${managerToken}`)
       .send({ title: `Delete Me ${TS}`, status: 'backlog', priority: 'low' })
       .end((err, res) => {
         expect(res).to.have.status(201);
         const id = res.body.id;
         chai.request(server)
           .delete(`/api/tasks/${id}`)
+          .set('Authorization', `Bearer ${managerToken}`)
           .end((err2, res2) => {
             expect(res2).to.have.status(204);
             done();
@@ -326,6 +442,7 @@ describe('Tasks API', () => {
     chai
       .request(server)
       .delete('/api/tasks/999999')
+      .set('Authorization', `Bearer ${managerToken}`)
       .end((err, res) => {
         expect(res).to.have.status(404);
         done();
@@ -333,7 +450,7 @@ describe('Tasks API', () => {
   });
 });
 
-// ---- Update User API ---- 
+// ---- Update User API ----
 
 describe('Update User API', () => {
   let token;
@@ -346,7 +463,12 @@ describe('Update User API', () => {
     });
   });
 
-  // update username
+  after(done => {
+    // email doesn't change, so this always finds the user even after username update
+    db.none('DELETE FROM users WHERE email = $1', [`updateuser${TS}@test.com`])
+      .then(() => done()).catch(done);
+  });
+
   it('Returns 200 and updated user when username is changed', done => {
     chai
       .request(server)
@@ -360,7 +482,6 @@ describe('Update User API', () => {
       });
   });
 
-  // newPassword without currentPassword 
   it('Returns 400 when newPassword is provided without currentPassword', done => {
     chai
       .request(server)
@@ -373,7 +494,6 @@ describe('Update User API', () => {
       });
   });
 
-  // wrong currentPassword 
   it('Returns 401 for incorrect currentPassword', done => {
     chai
       .request(server)
@@ -386,7 +506,6 @@ describe('Update User API', () => {
       });
   });
 
-  // no token
   it('Returns 401 when no token is provided', done => {
     chai
       .request(server)
@@ -398,5 +517,3 @@ describe('Update User API', () => {
       });
   });
 });
-
-

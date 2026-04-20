@@ -46,6 +46,13 @@ CREATE TABLE IF NOT EXISTS tasks (
     created_at  TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS task_worksite_history (
+    id          SERIAL    PRIMARY KEY,
+    task_id     INT       NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    worksite_id INT       REFERENCES worksites(id) ON DELETE SET NULL,
+    changed_at  TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS task_assignments (
     id          SERIAL      PRIMARY KEY,
     task_id     INT         NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
