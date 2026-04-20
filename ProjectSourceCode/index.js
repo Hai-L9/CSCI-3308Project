@@ -25,17 +25,9 @@ async function checkDatabaseStatus() {
   const start = Date.now();
   try {
     await pool.query('SELECT 1');
-    return {
-      status: 'ok',
-      responseTimeMs: Date.now() - start,
-      message: 'Connected',
-    };
+    return { status: 'ok', responseTimeMs: Date.now() - start, message: 'Connected' };
   } catch (err) {
-    return {
-      status: 'error',
-      responseTimeMs: Date.now() - start,
-      message: err.message,
-    };
+    return { status: 'error', responseTimeMs: Date.now() - start, message: err.message };
   }
 }
 
@@ -43,46 +35,23 @@ async function checkGoogleMapsStatus() {
   const start = Date.now();
   const key = process.env.GOOGLE_MAPS_API_KEY;
   if (!key) {
-    return {
-      status: 'missing',
-      responseTimeMs: 0,
-      message: 'GOOGLE_MAPS_API_KEY is not configured',
-    };
+    return { status: 'missing', responseTimeMs: 0, message: 'GOOGLE_MAPS_API_KEY is not configured' };
   }
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
-
   try {
     const url = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&callback=__serviceStatusCheck`;
     const response = await fetch(url, { signal: controller.signal });
     const body = await response.text();
-    const knownErrors = [
-      'ApiNotActivatedMapError',
-      'BillingNotEnabledMapError',
-      'DeletedApiProjectMapError',
-      'ExpiredKeyMapError',
-      'InvalidKeyMapError',
-      'RefererNotAllowedMapError',
-      'RequestDeniedMapError',
-    ];
+    const knownErrors = ['ApiNotActivatedMapError','BillingNotEnabledMapError','DeletedApiProjectMapError','ExpiredKeyMapError','InvalidKeyMapError','RefererNotAllowedMapError','RequestDeniedMapError'];
     const mapsError = knownErrors.find((errorCode) => body.includes(errorCode));
-
     return {
       status: response.ok && !mapsError ? 'ok' : 'error',
       responseTimeMs: Date.now() - start,
-      message: mapsError
-        ? mapsError
-        : response.ok
-          ? 'Reachable'
-          : `Google Maps returned HTTP ${response.status}`,
+      message: mapsError ? mapsError : response.ok ? 'Reachable' : `Google Maps returned HTTP ${response.status}`,
     };
   } catch (err) {
-    return {
-      status: 'error',
-      responseTimeMs: Date.now() - start,
-      message: err.name === 'AbortError' ? 'Google Maps status check timed out' : err.message,
-    };
+    return { status: 'error', responseTimeMs: Date.now() - start, message: err.name === 'AbortError' ? 'Google Maps status check timed out' : err.message };
   } finally {
     clearTimeout(timeout);
   }
@@ -119,7 +88,7 @@ app.use(session({
   },
 }));
 
-// Auth Routes
+// Auth — must be imported before any route that uses authenticateToken or requireRole
 const auth = require('./routes/auth');
 auth.init(pool);
 app.use('/api/auth', auth.router);
@@ -135,20 +104,13 @@ app.get('/api/config', (req, res) => {
 
 app.get('/api/service-status', async (req, res) => {
   const checkedAt = new Date().toISOString();
-  const [database, googleMaps] = await Promise.all([
-    checkDatabaseStatus(),
-    checkGoogleMapsStatus(),
-  ]);
+  const [database, googleMaps] = await Promise.all([checkDatabaseStatus(), checkGoogleMapsStatus()]);
   const healthy = database.status === 'ok' && googleMaps.status === 'ok';
-
   res.status(healthy ? 200 : 503).json({
     status: healthy ? 'ok' : 'degraded',
     checkedAt,
     statusHistoryKey: serviceStatusHistoryKey,
-    services: {
-      database,
-      googleMaps,
-    },
+    services: { database, googleMaps },
   });
 });
 
@@ -184,26 +146,16 @@ app.get('/api/tasks', authenticateToken, async (req, res) => {
   }
 });
 
+// Map tasks — managers and admins only
 app.get('/api/tasks/map', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
   try {
     const tasks = await db.any(
-      `SELECT
-         t.id,
-         t.title,
-         t.description,
-         t.status,
-         t.priority,
-         t.assignee,
-         t.due_date,
-         w.id AS worksite_id,
-         w.name AS worksite_name,
-         w.address AS worksite_address,
-         w.lat AS worksite_lat,
-         w.lng AS worksite_lng
+      `SELECT t.id, t.title, t.description, t.status, t.priority, t.assignee, t.due_date,
+              w.id AS worksite_id, w.name AS worksite_name, w.address AS worksite_address,
+              w.lat AS worksite_lat, w.lng AS worksite_lng
        FROM tasks t
        INNER JOIN worksites w ON w.id = t.worksite_id
-       WHERE w.lat IS NOT NULL
-         AND w.lng IS NOT NULL
+       WHERE w.lat IS NOT NULL AND w.lng IS NOT NULL
        ORDER BY t.due_date NULLS LAST, t.priority DESC, t.title`
     );
     res.json(tasks);
@@ -231,10 +183,7 @@ app.post('/api/tasks', authenticateToken, requireRole('admin', 'manager'), async
       }
     );
     if (worksite_id) {
-      await db.none(
-        'INSERT INTO task_worksite_history (task_id, worksite_id) VALUES ($1, $2)',
-        [result.id, worksite_id]
-      );
+      await db.none('INSERT INTO task_worksite_history (task_id, worksite_id) VALUES ($1, $2)', [result.id, worksite_id]);
     }
     res.status(201).json(result);
   } catch (err) {
@@ -242,11 +191,34 @@ app.post('/api/tasks', authenticateToken, requireRole('admin', 'manager'), async
   }
 });
 
-// Update task — managers and admins only
-app.patch('/api/tasks/:id', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
+// Update task
+// - Managers/admins can edit all fields
+// - Workers can only update status, and only on tasks assigned to them
+app.patch('/api/tasks/:id', authenticateToken, async (req, res) => {
   const taskId = parseInt(req.params.id);
-  const new_worksite_id = req.body.worksite_id ?? null;
   try {
+    if (req.user.role === 'worker') {
+      // Verify the task is assigned to this worker
+      const assigned = await db.oneOrNone(
+        `SELECT t.id FROM tasks t
+         WHERE t.id = $1
+           AND (t.created_by = $2
+                OR t.id IN (SELECT task_id FROM task_assignments WHERE user_id = $2))`,
+        [taskId, req.user.id]
+      );
+      if (!assigned) return res.status(403).json({ error: 'Forbidden' });
+
+      const validStatuses = ['backlog', 'in-progress', 'review', 'done'];
+      if (!validStatuses.includes(req.body.status)) {
+        return res.status(400).json({ error: 'Invalid status value' });
+      }
+
+      await db.none('UPDATE tasks SET status = $1 WHERE id = $2', [req.body.status, taskId]);
+      return res.status(200).json({ success: true });
+    }
+
+    // Managers and admins — full update
+    const new_worksite_id = req.body.worksite_id ?? null;
     const current = await db.oneOrNone('SELECT worksite_id FROM tasks WHERE id = $1', [taskId]);
     if (!current) return res.status(404).json({ error: 'Task not found' });
 
@@ -269,10 +241,7 @@ app.patch('/api/tasks/:id', authenticateToken, requireRole('admin', 'manager'), 
     );
 
     if (new_worksite_id !== current.worksite_id) {
-      await db.none(
-        'INSERT INTO task_worksite_history (task_id, worksite_id) VALUES ($1, $2)',
-        [taskId, new_worksite_id]
-      );
+      await db.none('INSERT INTO task_worksite_history (task_id, worksite_id) VALUES ($1, $2)', [taskId, new_worksite_id]);
     }
 
     res.status(200).json({ success: true });
@@ -306,6 +275,65 @@ app.delete('/api/tasks/:id', authenticateToken, requireRole('admin', 'manager'),
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete task' });
+  }
+});
+
+// AI Board Summary — managers and admins only
+app.post('/api/ai/summary', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
+  try {
+    const tasks = await db.any(
+      `SELECT t.title, t.status, t.priority, t.assignee, t.due_date, w.name AS worksite_name
+       FROM tasks t
+       LEFT JOIN worksites w ON w.id = t.worksite_id
+       ORDER BY t.status, t.priority`
+    );
+
+    if (tasks.length === 0) {
+      return res.json({ summary: 'No tasks currently exist on the board.' });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const prompt = `You are a project management assistant. A manager has requested a summary of their team's current Kanban board.
+
+Today's date: ${today}
+
+Here are all current tasks in JSON format:
+${JSON.stringify(tasks, null, 2)}
+
+Write a concise, professional board summary (5–8 sentences) that covers:
+- Overall board health and task distribution across statuses
+- Any overdue or high-priority items that need attention
+- Workload distribution across assignees if available
+- Any blockers or risks worth flagging
+
+Be direct and actionable. Do not repeat raw data — synthesize it into insight.`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 512,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      console.error('Anthropic API error:', err);
+      return res.status(502).json({ error: 'AI service unavailable' });
+    }
+
+    const data = await response.json();
+    const summary = data.content?.[0]?.text || 'No summary generated.';
+    res.json({ summary });
+  } catch (err) {
+    console.error('AI summary error:', err);
+    res.status(500).json({ error: 'Failed to generate summary' });
   }
 });
 
