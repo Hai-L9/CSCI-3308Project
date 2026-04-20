@@ -1,5 +1,5 @@
 (function () {
-  const APP_NAME = 'Task Tracker 0.0.2';
+  const APP_NAME = 'Task Tracker 0.5.3';
 
   const links = [
     { label: 'Home', href: '/' },
