@@ -15,6 +15,7 @@ Task Tracker is a Dockerized work-order management app for coordinating tasks ac
 - Optional task locations using Google Maps search or dropped pins
 - Manager/admin map dashboard with task markers and marker detail popups
 - Worksite creation and lookup
+- Worksite location history
 - Service status modal that checks:
   - PostgreSQL connectivity
   - Google Maps API reachability/configuration
