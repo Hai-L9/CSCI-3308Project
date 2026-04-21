@@ -17,13 +17,11 @@ function showError(message) {
   bootstrap.Toast.getOrCreateInstance(document.getElementById('errorToast')).show();
 }
 
-// Returns auth header object if a token exists, otherwise empty object
 function authHeaders() {
   const token = localStorage.getItem('token');
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-// Redirects to login if the server returns 401
 function handleUnauthorized(response) {
   if (response.status === 401) {
     localStorage.removeItem('token');
@@ -36,7 +34,6 @@ function handleUnauthorized(response) {
   }
 }
 
-// Returns the current user object from the server, falls back to localStorage
 async function getCurrentUser() {
   try {
     const res = await fetch('/api/auth/get-user', { headers: authHeaders() });
@@ -49,23 +46,18 @@ async function getCurrentUser() {
   }
 }
 
-// Kept for compatibility — reads from localStorage directly (already refreshed by getCurrentUser)
 function getCurrentUserSync() {
   try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
 }
 
-// Hides UI controls that workers should not see (create, edit, delete)
 async function applyRoleUI() {
   const user = await getCurrentUser();
   const isWorker = !user || user.role === 'worker';
-
-  // Hide the "Add Task" button for workers
   document.querySelectorAll('[data-manager-only]').forEach(el => {
     el.classList.toggle('d-none', isWorker);
   });
 }
 
-// Fetches tasks from the server — the backend already filters by role
 async function fetchTasks() {
   const response = await fetch('/api/tasks', { headers: authHeaders() });
   handleUnauthorized(response);
@@ -88,27 +80,23 @@ async function createTask(taskData) {
   return await response.json();
 }
 
-// UTC dates
 function formatDate(isoDate) {
   if (!isoDate) return 'No due date';
   const date = new Date(isoDate);
   return isNaN(date) ? '' : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
-
 let draggedTaskId = null;
 let lastDragY = 0;
-let taskOrder = []; // tracks display order of task ids
+let taskOrder = [];
 
 function makeDraggable(cardEl, taskId) {
   cardEl.setAttribute('draggable', 'true');
-
   cardEl.addEventListener('dragstart', (e) => {
     draggedTaskId = taskId;
     cardEl.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
   });
-
   cardEl.addEventListener('dragend', () => {
     draggedTaskId = null;
     cardEl.classList.remove('dragging');
@@ -122,14 +110,14 @@ function getInsertPosition(columnEl, y) {
     const rect = card.getBoundingClientRect();
     if (y < rect.top + rect.height / 2) return card;
   }
-  return null; // insert at end
+  return null;
 }
 
 const columnDragColors = {
-  'backlog':     { rgb: '108, 117, 125' },  // secondary/gray
-  'in-progress': { rgb: '13, 110, 253'  },  // primary/blue
-  'review':      { rgb: '255, 193, 7'   },  // warning/yellow
-  'done':        { rgb: '25, 135, 84'   },  // success/green
+  'backlog':     { rgb: '108, 117, 125' },
+  'in-progress': { rgb: '13, 110, 253'  },
+  'review':      { rgb: '255, 193, 7'   },
+  'done':        { rgb: '25, 135, 84'   },
 };
 
 function setupDropZone(columnEl) {
@@ -148,13 +136,9 @@ function setupDropZone(columnEl) {
     columnEl.classList.add('drag-over');
     columnEl.style.outline = `2px dashed rgba(${color}, 0.5)`;
     columnEl.style.backgroundColor = `rgba(${color}, 0.06)`;
-
     const insertBefore = getInsertPosition(columnEl, e.clientY);
-    if (insertBefore) {
-      columnEl.insertBefore(placeholder, insertBefore);
-    } else {
-      columnEl.appendChild(placeholder);
-    }
+    if (insertBefore) columnEl.insertBefore(placeholder, insertBefore);
+    else columnEl.appendChild(placeholder);
   });
 
   columnEl.addEventListener('dragleave', (e) => {
@@ -179,10 +163,8 @@ function setupDropZone(columnEl) {
     const task = tasks.find(t => t.id === draggedTaskId);
     if (!task) return;
 
-    // Reorder taskOrder based on where placeholder was dropped
-    const cards = [...columnEl.querySelectorAll('.task-card')];
-    const insertBefore = getInsertPosition(columnEl, lastDragY);
     taskOrder = taskOrder.filter(id => id !== draggedTaskId);
+    const insertBefore = getInsertPosition(columnEl, lastDragY);
     if (insertBefore) {
       const beforeId = parseInt(insertBefore.dataset.taskId);
       const idx = taskOrder.indexOf(beforeId);
@@ -194,19 +176,28 @@ function setupDropZone(columnEl) {
     task.status = newStatus;
     renderKanbanTasks();
 
-    try {
-      const res = await fetch(`/api/tasks/${draggedTaskId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({
+    const user = getCurrentUserSync();
+    const isWorker = user && user.role === 'worker';
+
+    // Workers send status only — backend verifies task is assigned to them
+    // Managers/admins send the full payload
+    const body = isWorker
+      ? { status: newStatus }
+      : {
           title: task.title,
           description: task.description,
           assignee: task.assignee,
           due_date: task.due_date,
           priority: task.priority,
           status: newStatus,
-          worksite_id: task.worksite_id
-        }),
+          worksite_id: task.worksite_id,
+        };
+
+    try {
+      const res = await fetch(`/api/tasks/${draggedTaskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify(body),
       });
       handleUnauthorized(res);
       if (!res.ok) throw new Error();
@@ -219,7 +210,6 @@ function setupDropZone(columnEl) {
     }
   });
 }
-
 
 const statusLabels = {
   'backlog': 'Backlog',
@@ -235,16 +225,16 @@ const priorityBadgeClass = {
 };
 
 const kanbanFilterProperties = {
-  task: { label: 'Task' },
+  task:     { label: 'Task' },
   assignee: { label: 'Assignee' },
   worksite: { label: 'Worksite' },
   priority: { label: 'Priority' },
 };
 
 const kanbanPriorityFilters = [
-  { value: 'high', label: 'High', className: 'text-bg-danger' },
+  { value: 'high',   label: 'High',   className: 'text-bg-danger'  },
   { value: 'medium', label: 'Medium', className: 'text-bg-warning' },
-  { value: 'low', label: 'Low', className: 'text-bg-success' },
+  { value: 'low',    label: 'Low',    className: 'text-bg-success' },
 ];
 
 let kanbanSearchFilters = [];
@@ -255,7 +245,7 @@ function includesText(value, query) {
 }
 
 function taskFilterText(task, property) {
-  if (property === 'task') return `${task.title} ${task.description}`;
+  if (property === 'task')     return `${task.title} ${task.description}`;
   if (property === 'assignee') return task.assignee;
   if (property === 'worksite') return `${task.worksite_name} ${task.worksite_address}`;
   if (property === 'priority') return task.priority;
@@ -267,11 +257,11 @@ function hasActiveKanbanFilters() {
 }
 
 function getFilteredTasks() {
-  return tasks.filter((task) => {
-    return kanbanSearchFilters.every((filter) =>
+  return tasks.filter((task) =>
+    kanbanSearchFilters.every((filter) =>
       includesText(taskFilterText(task, filter.property), filter.value.toLowerCase())
-    );
-  });
+    )
+  );
 }
 
 function renderKanbanTasks() {
@@ -313,9 +303,7 @@ function commitDraftFilter() {
   if (!kanbanDraftFilter) return;
   const input = document.getElementById('kanbanSearchDraftInput');
   const value = input?.value.trim() || '';
-  if (value) {
-    kanbanSearchFilters.push({ property: kanbanDraftFilter.property, value });
-  }
+  if (value) kanbanSearchFilters.push({ property: kanbanDraftFilter.property, value });
   kanbanDraftFilter = null;
   renderKanbanSearchBuilder();
   renderKanbanTasks();
@@ -340,10 +328,8 @@ function createDraftSearchToken() {
 
   if (kanbanDraftFilter.property === 'priority') {
     draft.classList.add('text-bg-light');
-
     const dropdown = document.createElement('span');
     dropdown.className = 'dropdown';
-
     const button = document.createElement('button');
     button.id = 'kanbanSearchDraftInput';
     button.type = 'button';
@@ -351,22 +337,16 @@ function createDraftSearchToken() {
     button.setAttribute('data-bs-toggle', 'dropdown');
     button.setAttribute('aria-expanded', 'false');
     button.textContent = 'Select priority';
-
     const menu = document.createElement('ul');
     menu.className = 'dropdown-menu';
     kanbanPriorityFilters.forEach((priority) => {
       const item = document.createElement('li');
       const option = document.createElement('button');
       option.type = 'button';
-      option.className = `dropdown-item d-flex align-items-center gap-2`;
+      option.className = 'dropdown-item d-flex align-items-center gap-2';
       option.innerHTML = `<span class="badge ${priority.className}">${priority.label}</span>`;
       option.addEventListener('click', () => {
-        kanbanSearchFilters.push({
-          property: 'priority',
-          value: priority.value,
-          displayValue: priority.label,
-          className: priority.className,
-        });
+        kanbanSearchFilters.push({ property: 'priority', value: priority.value, displayValue: priority.label, className: priority.className });
         kanbanDraftFilter = null;
         renderKanbanSearchBuilder();
         renderKanbanTasks();
@@ -374,14 +354,9 @@ function createDraftSearchToken() {
       item.appendChild(option);
       menu.appendChild(item);
     });
-
     button.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        cancelDraftFilter();
-      }
+      if (event.key === 'Escape') { event.preventDefault(); cancelDraftFilter(); }
     });
-
     dropdown.append(button, menu);
     draft.append(label, divider, dropdown);
     setTimeout(() => bootstrap.Dropdown.getOrCreateInstance(button).show(), 0);
@@ -394,19 +369,10 @@ function createDraftSearchToken() {
   input.placeholder = 'value';
   input.autocomplete = 'off';
   input.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      commitDraftFilter();
-    }
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      cancelDraftFilter();
-    }
+    if (event.key === 'Enter') { event.preventDefault(); commitDraftFilter(); }
+    if (event.key === 'Escape') { event.preventDefault(); cancelDraftFilter(); }
   });
-  input.addEventListener('blur', () => {
-    setTimeout(commitDraftFilter, 100);
-  });
-
+  input.addEventListener('blur', () => setTimeout(commitDraftFilter, 100));
   draft.append(label, divider, input);
   return draft;
 }
@@ -421,9 +387,7 @@ function renderKanbanSearchBuilder() {
   kanbanSearchFilters.forEach((filter, index) => {
     builder.insertBefore(createCommittedSearchToken(filter, index), placeholder);
   });
-  if (kanbanDraftFilter) {
-    builder.insertBefore(createDraftSearchToken(), placeholder);
-  }
+  if (kanbanDraftFilter) builder.insertBefore(createDraftSearchToken(), placeholder);
 
   placeholder.classList.toggle('d-none', Boolean(kanbanSearchFilters.length || kanbanDraftFilter));
   document.getElementById('kanbanSearchDraftInput')?.focus();
@@ -439,7 +403,6 @@ function bindKanbanFilters() {
   document.querySelectorAll('[data-kanban-filter-property]').forEach((button) => {
     button.addEventListener('click', () => startDraftFilter(button.dataset.kanbanFilterProperty));
   });
-
   const builder = document.getElementById('kanbanSearchBuilder');
   const addBtn = document.getElementById('kanbanFilterAddBtn');
   builder?.addEventListener('click', (event) => {
@@ -469,8 +432,7 @@ function openViewModal(taskId) {
   statusEl.innerHTML = `<span class="badge ${statusBadgeClass[task.status] || 'text-bg-secondary'}">${statusLabels[task.status] || task.status}</span>`;
 
   const priorityEl = document.getElementById('viewTaskPriority');
-  const pClass = priorityBadgeClass[task.priority] || 'text-bg-light border';
-  priorityEl.innerHTML = `<span class="badge ${pClass}">${task.priority}</span>`;
+  priorityEl.innerHTML = `<span class="badge ${priorityBadgeClass[task.priority] || 'text-bg-light border'}">${task.priority}</span>`;
 
   document.getElementById('viewTaskAssignee').textContent = task.assignee || '—';
   document.getElementById('viewTaskDueDate').textContent = formatDate(task.due_date);
@@ -503,9 +465,7 @@ function openViewModal(taskId) {
         const li = document.createElement('li');
         li.className = 'text-secondary';
         const date = new Date(entry.changed_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
-        const location = entry.worksite_name
-          ? `${entry.worksite_name}${entry.city ? `, ${entry.city}` : ''}`
-          : 'Removed';
+        const location = entry.worksite_name ? `${entry.worksite_name}${entry.city ? `, ${entry.city}` : ''}` : 'Removed';
         li.textContent = `${date} — ${location}`;
         historyList.appendChild(li);
       });
@@ -514,7 +474,6 @@ function openViewModal(taskId) {
 
   bootstrap.Modal.getOrCreateInstance(document.getElementById('viewTaskModal')).show();
 }
-
 
 function createTaskCard(task, num) {
   const template = document.getElementById('taskCardTemplate');
@@ -538,11 +497,50 @@ function createTaskCard(task, num) {
   priorityBadge.textContent = task.priority;
   priorityBadge.className = `task-priority badge ${priorityBadgeClass[task.priority] || 'text-bg-light border'}`;
 
-  const user = JSON.parse(localStorage.getItem('user'));
+  const user = getCurrentUserSync();
   const editBtn = taskCard.querySelector('.btn-edit-task');
+
   if (user && user.role === 'worker') {
+    // Workers: hide edit button, show status dropdown instead
     editBtn.classList.add('d-none');
+
+    const statusSelect = document.createElement('select');
+    statusSelect.className = 'form-select form-select-sm mt-2';
+    statusSelect.style.fontSize = '0.75rem';
+    statusSelect.innerHTML = `
+      <option value="backlog"     ${task.status === 'backlog'     ? 'selected' : ''}>Backlog</option>
+      <option value="in-progress" ${task.status === 'in-progress' ? 'selected' : ''}>In Progress</option>
+      <option value="review"      ${task.status === 'review'      ? 'selected' : ''}>Review</option>
+      <option value="done"        ${task.status === 'done'        ? 'selected' : ''}>Done</option>
+    `;
+
+    statusSelect.addEventListener('change', async (e) => {
+      e.stopPropagation();
+      const newStatus = e.target.value;
+      const previousStatus = task.status;
+      task.status = newStatus;
+      renderKanbanTasks();
+      try {
+        const res = await fetch(`/api/tasks/${task.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          body: JSON.stringify({ status: newStatus }),
+        });
+        handleUnauthorized(res);
+        if (!res.ok) throw new Error();
+        await fetchTasks();
+        renderKanbanTasks();
+      } catch {
+        task.status = previousStatus;
+        renderKanbanTasks();
+        showError('Failed to update status. Please try again.');
+      }
+    });
+
+    statusSelect.addEventListener('click', (e) => e.stopPropagation());
+    taskCard.querySelector('.card-body').appendChild(statusSelect);
   } else {
+    // Managers/admins: edit button as normal
     editBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       openEditModal(task.id);
@@ -555,12 +553,12 @@ function createTaskCard(task, num) {
     locEl.classList.remove('d-none');
   }
 
-  // Click to view — stop propagation on edit btn already handled above
   taskCard.addEventListener('click', (e) => {
-    if (e.target.closest('.btn-edit-task')) return;
+    if (e.target.closest('.btn-edit-task, select')) return;
     openViewModal(task.id);
   });
 
+  // All roles can drag — backend enforces what workers can update
   makeDraggable(taskCard, task.id);
 
   return taskCard;
@@ -569,10 +567,8 @@ function createTaskCard(task, num) {
 function renderTasksByStatus(taskList) {
   const taskLists = document.querySelectorAll('[data-status]');
 
-  // Merge any new task ids into taskOrder (preserving existing order)
   const knownIds = new Set(taskOrder);
   tasks.forEach(t => { if (!knownIds.has(t.id)) taskOrder.push(t.id); });
-  // Remove ids no longer in the full task set
   taskOrder = taskOrder.filter(id => tasks.some(t => t.id === id));
 
   const displayNum = new Map(taskOrder.map((id, i) => [id, i + 1]));
@@ -581,7 +577,6 @@ function renderTasksByStatus(taskList) {
   taskLists.forEach((columnBody) => {
     const status = columnBody.dataset.status;
     const tasksInColumn = taskList.filter((t) => t.status === status);
-
     columnBody.innerHTML = '';
 
     if (tasksInColumn.length === 0) {
