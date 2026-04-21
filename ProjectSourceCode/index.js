@@ -278,65 +278,6 @@ app.delete('/api/tasks/:id', authenticateToken, requireRole('admin', 'manager'),
   }
 });
 
-// AI Board Summary — managers and admins only
-app.post('/api/ai/summary', authenticateToken, requireRole('admin', 'manager'), async (req, res) => {
-  try {
-    const tasks = await db.any(
-      `SELECT t.title, t.status, t.priority, t.assignee, t.due_date, w.name AS worksite_name
-       FROM tasks t
-       LEFT JOIN worksites w ON w.id = t.worksite_id
-       ORDER BY t.status, t.priority`
-    );
-
-    if (tasks.length === 0) {
-      return res.json({ summary: 'No tasks currently exist on the board.' });
-    }
-
-    const today = new Date().toISOString().split('T')[0];
-    const prompt = `You are a project management assistant. A manager has requested a summary of their team's current Kanban board.
-
-Today's date: ${today}
-
-Here are all current tasks in JSON format:
-${JSON.stringify(tasks, null, 2)}
-
-Write a concise, professional board summary (5–8 sentences) that covers:
-- Overall board health and task distribution across statuses
-- Any overdue or high-priority items that need attention
-- Workload distribution across assignees if available
-- Any blockers or risks worth flagging
-
-Be direct and actionable. Do not repeat raw data — synthesize it into insight.`;
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 512,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-
-    if (!response.ok) {
-      const err = await response.json();
-      console.error('Anthropic API error:', err);
-      return res.status(502).json({ error: 'AI service unavailable' });
-    }
-
-    const data = await response.json();
-    const summary = data.content?.[0]?.text || 'No summary generated.';
-    res.json({ summary });
-  } catch (err) {
-    console.error('AI summary error:', err);
-    res.status(500).json({ error: 'Failed to generate summary' });
-  }
-});
-
 // Start the server
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
