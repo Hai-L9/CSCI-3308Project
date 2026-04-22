@@ -5,7 +5,7 @@ const pgSession = require('connect-pg-simple')(session);
 const { Pool } = require('pg');
 const path = require('path');
 const db = require('./src/resources/db.js');
-
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 if (!process.env.SESSION_SECRET) throw new Error('SESSION_SECRET is not set');
 if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET is not set');
 
@@ -112,6 +112,52 @@ app.get('/api/service-status', async (req, res) => {
     statusHistoryKey: serviceStatusHistoryKey,
     services: { database, googleMaps },
   });
+});
+
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { messages } = req.body;
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'messages array is required' });
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ reply: 'GEMINI_API_KEY is not configured on the server.' });
+    }
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-2.5-flash',
+      systemInstruction: {
+        role: "system",
+        parts: [{ text: "You are a helpful AI assistant for Task Tracker, a work-order management application. Keep your answers concise and helpful." }]
+      }
+    });
+    
+    // Process history for Gemini format
+    const history = messages.slice(0, -1).map(msg => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }]
+    }));
+    const latestMessage = messages[messages.length - 1]?.content || '';
+
+    if (!latestMessage) {
+      return res.status(400).json({ error: 'No valid message found.' });
+    }
+
+    const chat = model.startChat({
+      history: history
+    });
+
+    const result = await chat.sendMessage(latestMessage);
+    const response = await result.response;
+    const text = response.text();
+
+    res.json({ reply: text });
+  } catch (error) {
+    console.error('Chat API Error:', error);
+    res.status(500).json({ reply: 'Sorry, I encountered an error while processing your request.' });
+  }
 });
 
 // Welcome route

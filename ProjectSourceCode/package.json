@@ -25,6 +25,7 @@
     "express-session": "^1.19.0",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.20.0",
-    "pg-promise": "^12.6.2"
+    "pg-promise": "^12.6.2",
+    "@google/generative-ai": "^0.21.0"
   }
 }
