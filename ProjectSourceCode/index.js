@@ -6,6 +6,7 @@ const { Pool } = require('pg');
 const path = require('path');
 const db = require('./src/resources/db.js');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const jwt = require('jsonwebtoken');
 if (!process.env.SESSION_SECRET) throw new Error('SESSION_SECRET is not set');
 if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET is not set');
 
@@ -94,6 +95,91 @@ auth.init(pool);
 app.use('/api/auth', auth.router);
 const { authenticateToken, requireRole } = auth;
 
+function getOptionalChatUser(req) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.startsWith('Bearer ') && authHeader.slice(7);
+  if (!token) return null;
+
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    return { id: payload.id, role: payload.role };
+  } catch {
+    return null;
+  }
+}
+
+async function getTaskContextForUser(user) {
+  if (!user) {
+    return 'No logged-in user is available, so no task records are visible for this conversation.';
+  }
+
+  const canViewAllTasks = user.role === 'admin' || user.role === 'manager';
+  const visibilityClause = canViewAllTasks
+    ? ''
+    : `WHERE t.created_by = $1
+          OR t.id IN (SELECT task_id FROM task_assignments WHERE user_id = $1)`;
+  const params = canViewAllTasks ? [] : [user.id];
+
+  const tasks = await db.any(
+    `SELECT t.id, t.title, t.description, t.status, t.priority, t.assignee,
+            t.due_date, t.created_at,
+            creator.username AS created_by_username,
+            w.id AS worksite_id, w.name AS worksite_name, w.address AS worksite_address,
+            w.city AS worksite_city, w.state AS worksite_state,
+            w.lat AS worksite_lat, w.lng AS worksite_lng,
+            COALESCE(
+              string_agg(
+                DISTINCT assigned_user.username || ' (' || ta.role || ')',
+                ', '
+              ) FILTER (WHERE assigned_user.id IS NOT NULL),
+              ''
+            ) AS assigned_users
+       FROM tasks t
+       LEFT JOIN users creator ON creator.id = t.created_by
+       LEFT JOIN worksites w ON w.id = t.worksite_id
+       LEFT JOIN task_assignments ta ON ta.task_id = t.id
+       LEFT JOIN users assigned_user ON assigned_user.id = ta.user_id
+       ${visibilityClause}
+       GROUP BY t.id, creator.username, w.id
+       ORDER BY t.due_date NULLS LAST, t.priority DESC, t.status, t.title`,
+    params
+  );
+
+  if (tasks.length === 0) {
+    return `Logged-in user role: ${user.role}. No visible tasks were found.`;
+  }
+
+  const lines = tasks.map((task) => {
+    const worksiteParts = [
+      task.worksite_name,
+      task.worksite_address,
+      task.worksite_city,
+      task.worksite_state,
+    ].filter(Boolean);
+    const location = task.worksite_lat && task.worksite_lng
+      ? `${task.worksite_lat}, ${task.worksite_lng}`
+      : 'not set';
+
+    return [
+      `Task #${task.id}: ${task.title}`,
+      `status=${task.status}`,
+      `priority=${task.priority}`,
+      `due=${task.due_date ? new Date(task.due_date).toISOString().slice(0, 10) : 'not set'}`,
+      `assignee=${task.assignee || 'unassigned'}`,
+      `assignment_records=${task.assigned_users || 'none'}`,
+      `created_by=${task.created_by_username || 'unknown'}`,
+      `worksite=${worksiteParts.length ? worksiteParts.join(', ') : 'not set'}`,
+      `coordinates=${location}`,
+      `description=${task.description || 'none'}`,
+    ].join('; ');
+  });
+
+  return [
+    `Logged-in user role: ${user.role}. These are the task records visible to this user. Use them when answering task-specific questions, and do not claim access to tasks not listed here.`,
+    ...lines,
+  ].join('\n');
+}
+
 const worksites = require('./routes/worksites');
 worksites.init(pool, { authenticateToken, requireRole });
 app.use('/api/worksites', worksites.router);
@@ -125,12 +211,18 @@ app.post('/api/chat', async (req, res) => {
       return res.status(500).json({ reply: 'GEMINI_API_KEY is not configured on the server.' });
     }
 
+    const chatUser = getOptionalChatUser(req);
+    const taskContext = await getTaskContextForUser(chatUser);
+
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ 
       model: 'gemini-2.5-flash',
       systemInstruction: {
         role: "system",
-        parts: [{ text: "You are a helpful AI assistant for Task Tracker, a work-order management application. Keep your answers concise and helpful." }]
+        parts: [{ text: `You are a helpful AI assistant for Task Tracker, a work-order management application. Keep your answers concise and helpful.
+
+Current task context:
+${taskContext}` }]
       }
     });
     

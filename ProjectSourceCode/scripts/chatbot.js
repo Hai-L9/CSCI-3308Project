@@ -217,8 +217,8 @@
         body: JSON.stringify({ messages: history }),
       });
 
-      if (!res.ok) throw new Error('Request failed');
       const data = await res.json();
+      if (!res.ok) throw new Error(data.reply || data.error || 'Request failed');
       const reply = data.reply || 'Sorry, I didn\'t get a response.';
 
       loadingEl.textContent = reply;
@@ -226,8 +226,8 @@
       history.push({ role: 'assistant', content: reply });
       localStorage.setItem('chatbot_history', JSON.stringify(history));
 
-    } catch {
-      loadingEl.textContent = 'Something went wrong. Please try again.';
+    } catch (error) {
+      loadingEl.textContent = error.message || 'Something went wrong. Please try again.';
       loadingEl.classList.remove('loading');
       history.pop();
       localStorage.setItem('chatbot_history', JSON.stringify(history));

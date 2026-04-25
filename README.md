@@ -42,6 +42,7 @@ Task Tracker is a Dockerized work-order management app for coordinating tasks ac
 - Docker Desktop
 - Docker Compose
 - A Google Maps API key with the Maps JavaScript API and Places library enabled
+- A Gemini API key for the popup AI assistant
 
 ## Project Structure
 `index.js`: Server entry point
@@ -73,6 +74,9 @@ SESSION_SECRET=replace-with-a-long-random-session-secret
 
 # Google Maps
 GOOGLE_MAPS_API_KEY=replace-with-your-google-maps-api-key
+
+# Gemini AI assistant
+GEMINI_API_KEY=replace-with-your-gemini-api-key
 ```
 
 To generate tokens for `JWT_SECRET` and `SESSION_SECRET`, you can use one of the following commands:
@@ -266,6 +270,16 @@ Check that:
 - Billing and referrer restrictions are configured correctly
 
 The `Service Status` modal can help identify common Google Maps API key errors.
+
+> AI assistant says `GEMINI_API_KEY is not configured on the server`
+
+Add `GEMINI_API_KEY` to `ProjectSourceCode/.env`, then restart Docker Compose:
+
+```bash
+cd ProjectSourceCode
+docker compose down
+docker compose up
+```
 
 > Protected actions fail
 
